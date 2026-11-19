@@ -1,0 +1,17 @@
+# Runtime and persistent data directories
+data
+/data/
+*.db
+*.log
+
+# Environment secrets
+.env
+.env*.local
+!.env.example
+
+# OS & Editor artifacts
+.DS_Store
+*.swp
+*.swo
+.vscode/
+.idea/

@@ -1,0 +1,60 @@
+services:
+  gitea:
+    image: gitea/gitea:latest
+    container_name: forge-gitea
+    restart: always
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - GITEA__database__DB_TYPE=sqlite3
+      - GITEA__database__PATH=/data/gitea/gitea.db
+      - GITEA__server__DOMAIN=forge.linuxguy.space
+      - GITEA__server__SSH_DOMAIN=forge.linuxguy.space
+      - GITEA__server__ROOT_URL=https://forge.linuxguy.space/
+      - GITEA__server__HTTP_PORT=3000
+      - GITEA__security__INSTALL_LOCK=true
+      - GITEA__security__SECRET_KEY=unitysecretkey2026abcdefgh
+      - GITEA__security__INTERNAL_TOKEN=unityinternaltoken2026abcde
+      - GITEA__security__COOKIE_REMEMBER_NAME=gitea_incredible
+      - GITEA__security__COOKIE_SECURE=true
+      - GITEA__security__COOKIE_VALID_TIME=2592000
+      - GITEA__session__PROVIDER=db
+      - GITEA__session__COOKIE_NAME=i_like_gitea
+      - GITEA__session__COOKIE_SECURE=true
+      - GITEA__session__ENABLE_SET_COOKIE=true
+      - GITEA__session__SESSION_LIFE_TIME=2592000
+      - GITEA__session__SAME_SITE=lax
+      - GITEA__service__DISABLE_REGISTRATION=false
+      - GITEA__service__REQUIRE_SIGNIN_VIEW=false
+      - GITEA__service__REGISTER_EMAIL_CONFIRM=false
+      - GITEA__service__ENABLE_NOTIFY_MAIL=false
+      - GITEA__service__ENABLE_CAPTCHA=true
+      - GITEA__service__REQUIRE_CAPTCHA_FOR_LOGIN=true
+      - GITEA__service__CAPTCHA_TYPE=cfturnstile
+      - GITEA__service__CF_TURNSTILE_SITEKEY=${CF_TURNSTILE_SITEKEY:-1x00000000000000000000AA}
+      - GITEA__service__CF_TURNSTILE_SECRET=${CF_TURNSTILE_SECRET:-1x0000000000000000000000000000000AA}
+      - GITEA__actions__ENABLED=true
+      - GITEA__actions__DEFAULT_ACTIONS_URL=github
+      - GITEA__log__LEVEL=Warn
+      - GITEA__mailer__ENABLED=false
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - /opt/gitea/data:/data
+
+  runner:
+    image: gitea/act_runner:latest
+    container_name: forge-runner
+    restart: always
+    environment:
+      - GITEA_INSTANCE_URL=http://gitea:3000/
+      - GITEA_RUNNER_REGISTRATION_TOKEN=GBGUPBP8qaUJeBqsEOJO5kPgMjenFScSEPyzNRV0
+      - GITEA_RUNNER_NAME=forge-runner
+      - GITEA_RUNNER_LABELS=ubuntu-latest:docker://catthehacker/ubuntu:act-latest,ubuntu-22.04:docker://catthehacker/ubuntu:act-22.04,ubuntu-20.04:docker://catthehacker/ubuntu:act-20.04
+      - CONFIG_FILE=/data/config.yaml
+    volumes:
+      - /opt/gitea/runner-data:/data
+      - /opt/gitea/runner-cache:/root/.cache
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - gitea

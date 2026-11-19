@@ -1,0 +1,1329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forge — Sovereign Git Version Control &amp; CI/CD</title>
+<meta name="description" content="Self-hosted Git infrastructure engineered for teams that can't afford exposure. Full isolation, zero third-party dependency.">
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="6" fill="%23eef3f8"/><ellipse cx="16" cy="16" rx="14" ry="5.5" fill="none" stroke="%23ffab4d" stroke-width="1.5" transform="rotate(-24 16 16)"/></svg>'>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@1&family=JetBrains+Mono:wght@300;400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="/three.min.js"></script>
+<script>
+if (typeof THREE === 'undefined') {
+  document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script>');
+}
+</script>
+
+<style>
+:root {
+  --bg: #020308;
+  --ink: #eef3f8;
+  --dim: rgba(226, 234, 242, 0.64);
+  --faint: rgba(226, 234, 242, 0.32);
+  --line: rgba(226, 234, 242, 0.08);
+  --line-bright: rgba(226, 234, 242, 0.2);
+  --ok: #43e5a0;
+  --ac: 255, 171, 77;
+  --ac-hex: #ffab4d;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+  --sans: 'Space Grotesk', -apple-system, sans-serif;
+  --serif: 'Instrument Serif', Georgia, serif;
+  --pad: clamp(20px, 4.5vw, 64px);
+  --ez: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  min-height: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  text-rendering: optimizeLegibility;
+}
+
+/* Background Atmosphere */
+.vig {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background: radial-gradient(ellipse at 50% 50%, transparent 45%, rgba(2, 3, 8, 0.85) 100%);
+}
+
+/* Standard OS Cursor & Grab for 3D Canvas */
+a, button, [role="button"], .t-tab, .term-copy-btn {
+  cursor: pointer;
+}
+.hero-stage, canvas {
+  cursor: grab;
+}
+.hero-stage:active, canvas:active, body.grabbing, body.grabbing * {
+  cursor: grabbing !important;
+}
+
+/* Navigation */
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px var(--pad);
+  transition: all 0.4s var(--ez);
+}
+nav.scrolled {
+  padding: 14px var(--pad);
+  background: rgba(2, 3, 8, 0.78);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--line);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+.mark {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+.logo-badge {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(var(--ac), 0.15);
+  border: 1px solid rgba(var(--ac), 0.35);
+  color: var(--ac-hex);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.nav-links {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 6px 16px;
+  border-radius: 99px;
+  background: rgba(226, 234, 242, 0.04);
+  border: 1px solid rgba(226, 234, 242, 0.08);
+  backdrop-filter: blur(12px);
+}
+.nav-links a {
+  position: relative;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dim);
+  text-decoration: none;
+  padding: 4px 0;
+  transition: color 0.25s;
+}
+.nav-links a i {
+  font-family: var(--mono);
+  font-style: normal;
+  font-size: 9.5px;
+  color: var(--faint);
+  margin-right: 6px;
+}
+.nav-links a::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  height: 1px;
+  width: 100%;
+  background: #fff;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.35s var(--ez);
+}
+.nav-links a:hover { color: #fff; }
+.nav-links a:hover::after { transform: scaleX(1); }
+.nav-links a.on { color: #fff; }
+.nav-links a.on::after {
+  transform: scaleX(1);
+  background: rgb(var(--ac));
+  box-shadow: 0 0 10px rgb(var(--ac));
+}
+
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.nav-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.24em;
+  color: rgba(255, 171, 77, 0.95);
+}
+.nav-status i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 10px var(--ok);
+  animation: dotPulse 2.4s ease infinite;
+}
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.85); }
+}
+
+.nav-btn {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: none;
+  padding: 9px 20px;
+  border-radius: 10px;
+  border: 1px solid rgba(226, 234, 242, 0.16);
+  background: rgba(226, 234, 242, 0.04);
+  backdrop-filter: blur(8px);
+  transition: all 0.25s var(--ez);
+}
+.nav-btn:hover {
+  background: rgba(var(--ac), 0.15);
+  border-color: rgba(var(--ac), 0.5);
+  box-shadow: 0 0 20px rgba(var(--ac), 0.25);
+  color: #fff;
+}
+
+/* Mobile Menu */
+.burger {
+  display: none;
+  width: 44px;
+  height: 44px;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 0;
+}
+.burger span {
+  display: block;
+  width: 22px;
+  height: 1.5px;
+  background: var(--ink);
+  transition: transform 0.3s var(--ez);
+}
+body.m-open .burger span:first-child { transform: translateY(3.75px) rotate(45deg); }
+body.m-open .burger span:last-child { transform: translateY(-3.75px) rotate(-45deg); }
+
+.mmenu {
+  position: fixed;
+  inset: 0;
+  z-index: 85;
+  background: rgba(2, 3, 8, 0.96);
+  backdrop-filter: blur(20px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+  padding: 0 clamp(28px, 8vw, 60px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s var(--ez), visibility 0.3s;
+}
+body.m-open .mmenu { opacity: 1; visibility: visible; }
+.mmenu a {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  text-decoration: none;
+  color: var(--ink);
+  font-size: clamp(28px, 6vw, 40px);
+  font-weight: 600;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+/* Hero Section */
+.hero {
+  position: relative;
+  z-index: 10;
+  min-height: 100vh;
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 110px var(--pad) 50px;
+  overflow: hidden;
+}
+.hero-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#forge3d {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.hud {
+  position: absolute;
+  z-index: 5;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  color: rgba(226, 234, 242, 0.35);
+  text-transform: uppercase;
+  line-height: 2.2;
+  pointer-events: none;
+  text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
+}
+.hud-bl { left: var(--pad); bottom: 28px; display: flex; flex-direction: column; text-align: left; }
+.hud-br { right: var(--pad); bottom: 28px; display: flex; align-items: center; gap: 12px; }
+
+.hero-inner {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+  max-width: 960px;
+}
+.hero-inner a, .hero-inner button { pointer-events: all; }
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px;
+  border-radius: 99px;
+  border: 1px solid rgba(var(--ac), 0.3);
+  background: rgba(var(--ac), 0.08);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 0 24px rgba(var(--ac), 0.15);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.22em;
+  color: rgba(var(--ac), 0.95);
+  margin-bottom: 28px;
+  animation: softUp 0.9s 0.1s var(--ez) both;
+}
+.tag .dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgb(var(--ac));
+  box-shadow: 0 0 10px rgb(var(--ac));
+  animation: dotPulse 2.6s ease infinite;
+}
+
+/* Title & Descender Clearance */
+.title {
+  font-size: clamp(52px, 9.5vw, 140px);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+  margin-bottom: 34px;
+  text-shadow: 0 0 80px rgba(var(--ac), 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.title .line-1 {
+  display: block;
+  color: #fff;
+  animation: softUp 1s 0.15s var(--ez) both;
+}
+.title .line-2 {
+  display: block;
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 1.06em;
+  line-height: 1.18;
+  padding-bottom: 0.18em;
+  color: #fff;
+  text-shadow: 0 0 45px rgba(var(--ac), 0.55);
+  animation: softUp 1s 0.25s var(--ez) both;
+}
+.title .line-2 em {
+  font-style: italic;
+  background: linear-gradient(135deg, #ffffff 15%, rgba(var(--ac), 0.95) 75%, rgba(var(--ac), 0.75) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+@keyframes softUp {
+  from { opacity: 0; transform: translateY(22px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.sub {
+  max-width: 620px;
+  font-size: clamp(15px, 1.6vw, 17.5px);
+  line-height: 1.75;
+  color: rgba(226, 234, 242, 0.92);
+  margin-bottom: 36px;
+  animation: softUp 0.9s 0.35s var(--ez) both;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.95), 0 0 12px rgba(2, 6, 23, 0.95);
+  padding: 10px 20px;
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.35);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(226, 234, 242, 0.06);
+}
+
+.ctas {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+  animation: softUp 0.9s 0.45s var(--ez) both;
+}
+.btn {
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+  padding: 12px 28px;
+  border-radius: 10px;
+  transition: all 0.25s var(--ez);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-p {
+  background: #ffab4d;
+  color: #020308;
+  box-shadow: 0 0 32px rgba(var(--ac), 0.38);
+}
+.btn-p:hover {
+  background: #ffbb6e;
+  box-shadow: 0 0 45px rgba(var(--ac), 0.55);
+  transform: translateY(-2px);
+}
+.btn-g {
+  background: rgba(226, 234, 242, 0.05);
+  color: var(--ink);
+  border: 1px solid rgba(226, 234, 242, 0.15);
+  backdrop-filter: blur(8px);
+}
+.btn-g:hover {
+  color: #fff;
+  border-color: rgba(var(--ac), 0.5);
+  background: rgba(var(--ac), 0.12);
+  transform: translateY(-2px);
+}
+
+.stats-row {
+  display: flex;
+  gap: 45px;
+  margin-top: 42px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+  animation: softUp 0.9s 0.6s var(--ez) both;
+}
+.stat { text-align: center; }
+.stat .sv {
+  font-size: clamp(24px, 2.8vw, 34px);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: #fff;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+.stat .sv .u {
+  font-size: 15px;
+  color: var(--ac-hex);
+  font-weight: 500;
+  margin-left: 2px;
+}
+.stat .sl {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: rgba(226, 234, 242, 0.4);
+  text-transform: uppercase;
+}
+
+/* Bento Capability Grid */
+.bento-section {
+  position: relative;
+  z-index: 10;
+  padding: 60px var(--pad) 100px;
+  max-width: 1240px;
+  margin: 0 auto;
+}
+.section-head {
+  text-align: center;
+  max-width: 680px;
+  margin: 0 auto 50px;
+}
+.section-tag {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.24em;
+  color: rgba(var(--ac), 0.9);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  display: block;
+}
+.section-title {
+  font-size: clamp(32px, 4.5vw, 54px);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  margin-bottom: 16px;
+  line-height: 1.15;
+}
+.section-desc {
+  font-size: 15px;
+  color: var(--dim);
+  line-height: 1.7;
+}
+
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 20px;
+}
+.bento-card {
+  position: relative;
+  background: rgba(226, 234, 242, 0.02);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: clamp(24px, 3.2vw, 36px);
+  overflow: hidden;
+  transition: border-color 0.3s, transform 0.25s var(--ez);
+  will-change: transform;
+}
+.bento-card:hover {
+  border-color: rgba(var(--ac), 0.4);
+}
+.col-8 { grid-column: span 8; }
+.col-4 { grid-column: span 4; }
+.col-6 { grid-column: span 6; }
+.col-12 { grid-column: span 12; }
+
+.card-badge {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  color: rgba(var(--ac), 0.95);
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+.card-title {
+  font-size: clamp(20px, 2.2vw, 25px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: 12px;
+  line-height: 1.25;
+}
+.card-desc {
+  font-size: 14px;
+  color: var(--dim);
+  line-height: 1.65;
+  margin-bottom: 20px;
+}
+
+/* Protocol Terminal Switcher */
+.term-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.5);
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.term-dots {
+  display: flex;
+  gap: 6px;
+}
+.term-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.term-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+}
+.t-tab {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: none;
+  border: 1px solid transparent;
+  color: var(--dim);
+  padding: 4px 10px;
+  border-radius: 6px;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.t-tab:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+.t-tab.active {
+  color: var(--ac-hex);
+  background: rgba(var(--ac), 0.12);
+  border-color: rgba(var(--ac), 0.3);
+}
+.term-copy-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  padding: 4px 10px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+.term-copy-btn:hover {
+  background: rgba(var(--ac), 0.2);
+  border-color: rgba(var(--ac), 0.4);
+  color: #fff;
+}
+.term-body {
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.35);
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: #f1f5f9;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+/* Comparison Matrix Table */
+.matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 14px;
+  font-size: 13.5px;
+}
+.matrix-table th {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--faint);
+  text-transform: uppercase;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.matrix-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(226, 234, 242, 0.04);
+}
+.matrix-table tr:last-child td { border-bottom: 0; }
+
+/* Footer */
+footer {
+  position: relative;
+  z-index: 10;
+  border-top: 1px solid var(--line);
+  padding: 40px var(--pad);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--dim);
+  flex-wrap: wrap;
+  gap: 20px;
+}
+.ft-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #fff;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 14px;
+}
+.ft-links {
+  display: flex;
+  gap: 24px;
+}
+.ft-links a {
+  color: var(--dim);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.ft-links a:hover { color: #fff; }
+.ft-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ok);
+}
+.ft-status i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 8px var(--ok);
+}
+
+@media (max-width: 900px) {
+  .nav-links { display: none; }
+  .burger { display: flex; }
+  .col-8, .col-4, .col-6 { grid-column: span 12; }
+  .hud { display: none; }
+  .stats-row { gap: 24px; }
+}
+</style>
+</head>
+<body>
+
+<div class="vig" aria-hidden="true"></div>
+
+<!-- Navigation -->
+<nav id="nav">
+  <a class="logo" href="/">
+    <svg class="mark" viewBox="0 0 34 34" aria-hidden="true">
+      <ellipse cx="17" cy="17" rx="14.5" ry="6" fill="none" stroke="rgba(238,243,248,.6)" stroke-width="1.2" transform="rotate(-24 17 17)"/>
+      <circle cx="17" cy="17" r="4.6" fill="#eef3f8"/>
+      <circle cx="27.4" cy="12.2" r="1.9" fill="rgb(var(--ac))"/>
+    </svg>
+    <span>Forge</span>
+  </a>
+
+  <div class="nav-right">
+    <a class="nav-btn" href="/user/login">Sign In</a>
+    <button class="burger" id="burger" aria-label="Open menu"><span></span><span></span></button>
+  </div>
+</nav>
+
+<!-- Mobile Menu -->
+<div class="mmenu" id="mmenu">
+  <a href="/user/login"><i>→</i>Sign In</a>
+</div>
+
+<!-- Hero Section with Fullscreen 3D Celestial Molten Planet -->
+<main class="hero">
+  <div class="hero-stage">
+    <canvas id="forge3d" aria-hidden="true"></canvas>
+  </div>
+
+  <div class="hud hud-bl">
+    <span>FORGE CLUSTER · INNER SYSTEM</span>
+    <span>PROTOCOL GIT/2 · SSH READY</span>
+  </div>
+  <div class="hud hud-br">
+    <span id="utc">00:00:00 UTC</span>
+    <em>·</em>
+    <span>ALL SYSTEMS NOMINAL</span>
+  </div>
+
+  <div class="hero-inner">
+    <div class="tag">
+      <span class="dot"></span>
+      <span>MODULE 01 · SOVEREIGN SOURCE CONTROL</span>
+    </div>
+
+    <h1 class="title">
+      <span class="line-1">Sovereign</span>
+      <span class="line-2"><em>Git Engine.</em></span>
+    </h1>
+
+    <p class="sub">Self-hosted Git infrastructure engineered for engineering teams that cannot afford exposure. Branch protection, cryptographic audit logs, high-speed SSH/HTTPS, and zero third-party telemetry.</p>
+
+    <div class="ctas">
+      <a class="btn btn-p" href="/user/login">Launch Forge →</a>
+      <a class="btn btn-g" href="/user/sign_up">Create Account</a>
+      <a class="btn btn-g" href="/explore/repos">Explore Code</a>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat">
+        <div class="sv">100<span class="u">%</span></div>
+        <div class="sl">Sovereignty</div>
+      </div>
+      <div class="stat">
+        <div class="sv">&lt;1<span class="u">ms</span></div>
+        <div class="sl">Push Latency</div>
+      </div>
+      <div class="stat">
+        <div class="sv">Dual<span class="u">Stack</span></div>
+        <div class="sl">SSH &amp; HTTPS</div>
+      </div>
+      <div class="stat">
+        <div class="sv">∞</div >
+        <div class="sl">Repositories</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- Bento Grid Capabilities Section -->
+<section class="bento-section">
+  <div class="section-head">
+    <span class="section-tag">Core Capabilities</span>
+    <h2 class="section-title">Engineered for Sovereign Development</h2>
+    <p class="section-desc">Zero telemetry. Complete control over your proprietary codebase, pipelines, and CI automation.</p>
+  </div>
+
+  <div class="bento-grid">
+    <!-- Card 1: Interactive Protocol Terminal -->
+    <div class="bento-card col-8 tilt-card">
+      <span class="card-badge">Developer Workflows</span>
+      <h3 class="card-title">Universal Git CLI &amp; Dual-Stack Access</h3>
+      <p class="card-desc">Standard Git commands work seamlessly out of the box with hardened SSH cryptographic keys and high-throughput HTTPS.</p>
+
+      <div class="terminal-box" style="margin-top:16px;">
+        <div class="term-header">
+          <div class="term-dots">
+            <span class="term-dot" style="background:#f43f5e;"></span>
+            <span class="term-dot" style="background:#fbbf24;"></span>
+            <span class="term-dot" style="background:#34d399;"></span>
+          </div>
+          <div class="term-tabs">
+            <button class="t-tab active" data-tab="ssh" onclick="switchForgeTab('ssh')">SSH Clone</button>
+            <button class="t-tab" data-tab="https" onclick="switchForgeTab('https')">HTTPS Clone</button>
+            <button class="t-tab" data-tab="push" onclick="switchForgeTab('push')">Git Push</button>
+            <button class="t-tab" data-tab="actions" onclick="switchForgeTab('actions')">Actions CI/CD</button>
+            <button class="t-tab" data-tab="api" onclick="switchForgeTab('api')">Forge API</button>
+          </div>
+          <button class="term-copy-btn" onclick="copyForgeCommand()">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            <span id="forgeCopyText">Copy</span>
+          </button>
+        </div>
+        <div class="term-body" id="forgeTerminalContent">
+          <!-- dynamic content -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 2: Sovereign CI/CD Pipelines -->
+    <div class="bento-card col-4 tilt-card">
+      <span class="card-badge">Actions Runner</span>
+      <h3 class="card-title">Sovereign Automated Pipelines</h3>
+      <p class="card-desc">Gitea Actions powered by dedicated local Docker runners. Pushing code triggers high-speed containerized testing, builds, and release workflows with zero cloud lock-in.</p>
+      <div style="margin-top:20px;display:flex;align-items:center;justify-content:space-between;padding:14px;background:rgba(255,255,255,0.03);border-radius:10px;font-family:var(--mono);font-size:12px;">
+        <span>Runner Status</span>
+        <span style="color:var(--ok)">✓ Online &amp; Nominal</span>
+      </div>
+    </div>
+
+    <!-- Card 3: Cryptographic Auditability -->
+    <div class="bento-card col-4 tilt-card">
+      <span class="card-badge">Compliance</span>
+      <h3 class="card-title">Cryptographic Integrity</h3>
+      <p class="card-desc">Every commit, tag, and merge request is verified with GPG signatures and immutable commit histories. Isolated sovereign authentication records guarantee verifiable provenance.</p>
+      <div style="margin-top:20px;display:flex;align-items:center;justify-content:space-between;padding:14px;background:rgba(255,255,255,0.03);border-radius:10px;font-family:var(--mono);font-size:12px;">
+        <span>GPG Verification</span>
+        <span style="color:var(--ok)">✓ Enforced SHA-1/256</span>
+      </div>
+    </div>
+
+    <!-- Card 4: Comparison Matrix -->
+    <div class="bento-card col-8 tilt-card">
+      <span class="card-badge">Sovereign Architecture</span>
+      <h3 class="card-title">Forge vs. Public Cloud Git</h3>
+      <p class="card-desc">Complete freedom from foreign SaaS downtime, IP scanning, code training, and arbitrary seat licensing fees.</p>
+      
+      <table class="matrix-table">
+        <thead>
+          <tr>
+            <th>Capability</th>
+            <th>Forge Git</th>
+            <th>Cloud SaaS (GitHub/GitLab)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Code Privacy</td>
+            <td style="color:var(--ok); font-weight:600;">100% Airgapped Sovereign</td>
+            <td style="color:#f87171">Third-party Cloud Hosted</td>
+          </tr>
+          <tr>
+            <td>Code AI Training</td>
+            <td style="color:var(--ok); font-weight:600;">Never (Zero telemetry)</td>
+            <td style="color:#f87171">Subject to Cloud Terms</td>
+          </tr>
+          <tr>
+            <td>Seat Pricing</td>
+            <td style="color:var(--ok); font-weight:600;">$0 / Unlimited Users</td>
+            <td style="color:#f87171">$21+ / user / month</td>
+          </tr>
+          <tr>
+            <td>Data Sovereignty</td>
+            <td style="color:var(--ok); font-weight:600;">Bare-metal Local NVMe</td>
+            <td style="color:#f87171">Foreign Jurisdiction Data Centers</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="ft-l">
+    <a class="ft-logo" href="/">
+      <svg class="mark" viewBox="0 0 34 34" aria-hidden="true">
+        <ellipse cx="17" cy="17" rx="14.5" ry="6" fill="none" stroke="rgba(238,243,248,.6)" stroke-width="1.2" transform="rotate(-24 17 17)"/>
+        <circle cx="17" cy="17" r="4.6" fill="#eef3f8"/>
+        <circle cx="27.4" cy="12.2" r="1.9" fill="rgb(var(--ac))"/>
+      </svg>
+      Forge Git
+    </a>
+  </div>
+  <div class="ft-links">
+    <a href="/explore/repos">Repositories</a>
+    <a href="/user/login">Login</a>
+  </div>
+  <div class="ft-m">
+    <span>51.4778° N · 0.0015° W</span>
+    <span id="ftUp">SESSION T+00:00:00</span>
+  </div>
+  <div class="ft-status"><i></i>All systems nominal</div>
+</footer>
+
+<script>
+(() => {
+  'use strict';
+  const $ = s => document.querySelector(s);
+  const $$ = s => [...document.querySelectorAll(s)];
+  const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
+  const p2 = n => String(n).padStart(2, '0');
+  const RM = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const DPR = Math.min(window.devicePixelRatio || 1, 1.25);
+
+  /* 3D Celestial Molten Planetary Core (Three.js - Hardware Accelerated 60+ FPS) */
+  const canvas = $('#forge3d');
+  let renderer = null, scene = null, camera = null;
+  let planet = null, ring = null, embers = null, stars = null;
+  let drag = false, lx = 0, ly = 0, rotY = 0, rotX = 0;
+
+  function createLavaTexture() {
+    const c = document.createElement('canvas');
+    c.width = 1024; c.height = 512;
+    const ctx = c.getContext('2d');
+    
+    // Deep incandescent basalt & obsidian base
+    const grad = ctx.createLinearGradient(0, 0, 0, 512);
+    grad.addColorStop(0, '#1c0803');
+    grad.addColorStop(0.5, '#0e0402');
+    grad.addColorStop(1, '#180702');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 1024, 512);
+
+    // Basalt continental tectonic plates
+    ctx.fillStyle = '#220b05';
+    for (let i = 0; i < 42; i++) {
+      ctx.beginPath();
+      ctx.arc(Math.random() * 1024, Math.random() * 512, 45 + Math.random() * 95, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Glowing magma river trenches
+    ctx.strokeStyle = '#ea580c';
+    ctx.lineWidth = 3.5;
+    ctx.shadowColor = '#f97316';
+    ctx.shadowBlur = 14;
+    for (let i = 0; i < 30; i++) {
+      ctx.beginPath();
+      let sx = Math.random() * 1024, sy = Math.random() * 512;
+      ctx.moveTo(sx, sy);
+      for (let j = 0; j < 6; j++) {
+        sx += (Math.random() - 0.5) * 150;
+        sy += (Math.random() - 0.5) * 95;
+        ctx.lineTo(sx, sy);
+      }
+      ctx.stroke();
+    }
+
+    // Solar white-hot fissure cores
+    ctx.strokeStyle = '#fef08a';
+    ctx.lineWidth = 1.2;
+    ctx.shadowColor = '#fef08a';
+    ctx.shadowBlur = 8;
+    for (let i = 0; i < 22; i++) {
+      ctx.beginPath();
+      let sx = Math.random() * 1024, sy = Math.random() * 512;
+      ctx.moveTo(sx, sy);
+      for (let j = 0; j < 4; j++) {
+        sx += (Math.random() - 0.5) * 120;
+        sy += (Math.random() - 0.5) * 70;
+        ctx.lineTo(sx, sy);
+      }
+      ctx.stroke();
+    }
+
+    // Incandescent caldera hot spots
+    ctx.fillStyle = '#fbbf24';
+    ctx.shadowColor = '#ea580c';
+    ctx.shadowBlur = 16;
+    for (let i = 0; i < 35; i++) {
+      ctx.beginPath();
+      ctx.arc(Math.random() * 1024, Math.random() * 512, Math.random() * 6 + 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    return new THREE.CanvasTexture(c);
+  }
+
+  function initForgeHero3D() {
+    if (typeof THREE === 'undefined' || !canvas) return;
+    try {
+      const w = canvas.parentElement.clientWidth;
+      const h = canvas.parentElement.clientHeight;
+
+      renderer = new THREE.WebGLRenderer({
+        canvas,
+        alpha: true,
+        antialias: true,
+        powerPreference: 'high-performance'
+      });
+      renderer.setPixelRatio(DPR);
+      renderer.setSize(w, h);
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.2;
+
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(40, w / h, 0.1, 100);
+      camera.position.set(0, 0, 9.8);
+
+      // Lighting
+      scene.add(new THREE.AmbientLight(0xffedd5, 0.4));
+      const dirLight = new THREE.DirectionalLight(0xffedd5, 2.5);
+      dirLight.position.set(-6, 4, 6);
+      scene.add(dirLight);
+
+      const lavaLight = new THREE.PointLight(0xff7b22, 2.2, 14);
+      lavaLight.position.set(0, 0, 1);
+      scene.add(lavaLight);
+
+      // Background Starfield (Single draw call)
+      const starCount = 400;
+      const starGeo = new THREE.BufferGeometry();
+      const starPos = new Float32Array(starCount * 3);
+      for (let i = 0; i < starCount * 3; i += 3) {
+        starPos[i] = (Math.random() - 0.5) * 60;
+        starPos[i + 1] = (Math.random() - 0.5) * 60;
+        starPos[i + 2] = -5 - Math.random() * 40;
+      }
+      starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+      stars = new THREE.Points(starGeo, new THREE.PointsMaterial({
+        color: 0xffedd5,
+        size: 0.08,
+        transparent: true,
+        opacity: 0.65
+      }));
+      scene.add(stars);
+
+      // Molten Celestial Planet
+      const lavaTex = createLavaTexture();
+      const planetMat = new THREE.MeshStandardMaterial({
+        map: lavaTex,
+        emissiveMap: lavaTex,
+        emissive: 0xff6611,
+        emissiveIntensity: 0.65,
+        roughness: 0.72,
+        metalness: 0.28
+      });
+      planet = new THREE.Mesh(new THREE.SphereGeometry(2.35, 48, 48), planetMat);
+      scene.add(planet);
+
+      // Orbiting Molten Ring
+      const ringMat = new THREE.MeshStandardMaterial({
+        color: 0xffab4d,
+        emissive: 0xff7b22,
+        emissiveIntensity: 0.45,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.38
+      });
+      ring = new THREE.Mesh(new THREE.RingGeometry(3.1, 4.9, 64), ringMat);
+      ring.rotation.x = Math.PI / 2.3;
+      ring.rotation.y = -0.28;
+      scene.add(ring);
+
+      // Rising Incandescent Embers
+      const emberCount = 80;
+      const emberPos = new Float32Array(emberCount * 3);
+      for (let i = 0; i < emberCount; i++) {
+        emberPos[i * 3] = (Math.random() - 0.5) * 6;
+        emberPos[i * 3 + 1] = (Math.random() - 0.5) * 6;
+        emberPos[i * 3 + 2] = (Math.random() - 0.5) * 4;
+      }
+      const emberGeo = new THREE.BufferGeometry();
+      emberGeo.setAttribute('position', new THREE.BufferAttribute(emberPos, 3));
+      embers = new THREE.Points(emberGeo, new THREE.PointsMaterial({
+        color: 0xffab4d,
+        size: 0.12,
+        transparent: true,
+        opacity: 0.85,
+        blending: THREE.AdditiveBlending
+      }));
+      scene.add(embers);
+
+      // Interactive Drag Rotation
+      canvas.addEventListener('pointerdown', e => {
+        drag = true;
+        lx = e.clientX; ly = e.clientY;
+        document.body.classList.add('grabbing');
+      });
+      window.addEventListener('pointermove', e => {
+        if (!drag) return;
+        const dx = e.clientX - lx;
+        const dy = e.clientY - ly;
+        lx = e.clientX; ly = e.clientY;
+        rotY += dx * 0.007;
+        rotX = clamp(rotX + dy * 0.005, -0.6, 1.2);
+      });
+      window.addEventListener('pointerup', () => {
+        drag = false;
+        document.body.classList.remove('grabbing');
+      });
+
+    } catch (e) {
+      console.warn('[FORGE] 3D initialization failed:', e);
+    }
+  }
+
+  /* Bento 3D Tilt Cards (Cached getBoundingClientRect to prevent reflow lag) */
+  function initBentoCards() {
+    if (RM) return;
+    const cards = $$('.tilt-card');
+    cards.forEach(card => {
+      let raf = null, curX = 0, curY = 0, tarX = 0, tarY = 0;
+      let cachedRect = null;
+
+      card.addEventListener('pointerenter', () => {
+        cachedRect = card.getBoundingClientRect();
+      });
+
+      card.addEventListener('pointermove', e => {
+        if (!cachedRect) cachedRect = card.getBoundingClientRect();
+        const r = cachedRect;
+        const x = e.clientX - r.left;
+        const y = e.clientY - r.top;
+        const cx = r.width / 2;
+        const cy = r.height / 2;
+
+        tarY = ((x - cx) / cx) * 8;
+        tarX = -((y - cy) / cy) * 8;
+
+        const angle = Math.atan2(y - cy, x - cx) * (180 / Math.PI) + 90;
+        card.style.setProperty('--rim-angle', `${angle.toFixed(1)}deg`);
+        card.style.setProperty('--mouse-x', `${(x / r.width) * 100}%`);
+        card.style.setProperty('--mouse-y', `${(y / r.height) * 100}%`);
+
+        if (!raf) {
+          const update = () => {
+            curX += (tarX - curX) * 0.12;
+            curY += (tarY - curY) * 0.12;
+            card.style.transform = `perspective(800px) rotateX(${curX.toFixed(2)}deg) rotateY(${curY.toFixed(2)}deg) translateZ(6px)`;
+            if (Math.abs(tarX - curX) > 0.05 || Math.abs(tarY - curY) > 0.05) {
+              raf = requestAnimationFrame(update);
+            } else {
+              raf = null;
+            }
+          };
+          raf = requestAnimationFrame(update);
+        }
+      });
+
+      card.addEventListener('pointerleave', () => {
+        cachedRect = null;
+        tarX = 0; tarY = 0;
+        const reset = () => {
+          curX += (0 - curX) * 0.12;
+          curY += (0 - curY) * 0.12;
+          card.style.transform = `perspective(800px) rotateX(${curX.toFixed(2)}deg) rotateY(${curY.toFixed(2)}deg) translateZ(0px)`;
+          if (Math.abs(curX) > 0.05 || Math.abs(curY) > 0.05) {
+            requestAnimationFrame(reset);
+          } else {
+            card.style.transform = '';
+          }
+        };
+        requestAnimationFrame(reset);
+      });
+    });
+  }
+
+  /* Clock & Uptime */
+  const utc = $('#utc'), ftUp = $('#ftUp');
+  const t0 = Date.now();
+  setInterval(() => {
+    const d = new Date();
+    if (utc) utc.textContent = `${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}:${p2(d.getUTCSeconds())} UTC`;
+    const s = ((Date.now() - t0) / 1000) | 0;
+    if (ftUp) ftUp.textContent = `SESSION T+${p2((s / 3600) | 0)}:${p2(((s / 60) | 0) % 60)}:${p2(s % 60)}`;
+  }, 1000);
+
+  /* Interactive Forge Terminal Switcher */
+  const forgeTabs = {
+    ssh: {
+      cmd: `git clone git@forge.linuxguy.space:vaishnosingh/COSMOS.git`,
+      desc: `# Clone securely over SSH with cryptographic host identity`
+    },
+    https: {
+      cmd: `git clone https://forge.linuxguy.space/vaishnosingh/COSMOS.git`,
+      desc: `# Dual-stack HTTPS with TLS v1.3 encryption`
+    },
+    push: {
+      cmd: `git remote add forge git@forge.linuxguy.space:vaishnosingh/COSMOS.git\ngit branch -M main\ngit push -u forge main`,
+      desc: `# Sub-millisecond push latency on local NVMe storage`
+    },
+    actions: {
+      cmd: `# .forge/workflows/ci.yaml\nname: Cosmos Sovereign CI\non: [push, pull_request]\njobs:\n  test:\n    runs-on: native-docker\n    steps:\n      - uses: actions/checkout@v4\n      - run: go test -v ./...`,
+      desc: `# Dedicated local Docker runners with zero cloud egress lock-in`
+    },
+    api: {
+      cmd: `curl -H "Authorization: token $FORGE_TOKEN" \\\n     https://forge.linuxguy.space/api/v1/user/repos`,
+      desc: `# 100% Gitea/GitHub compatible REST API endpoints`
+    }
+  };
+
+  let activeForgeTab = 'ssh';
+
+  function renderForgeTab() {
+    const data = forgeTabs[activeForgeTab];
+    if (!data) return;
+    const body = $('#forgeTerminalContent');
+    if (!body) return;
+    body.innerHTML = `<span style="color:#64748b;">${data.desc}</span>\n<span style="color:#ffab4d;">$</span> ${data.cmd}`;
+  }
+
+  window.switchForgeTab = function(tab) {
+    activeForgeTab = tab;
+    $$('.t-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    renderForgeTab();
+  };
+
+  window.copyForgeCommand = function() {
+    const data = forgeTabs[activeForgeTab];
+    if (!data) return;
+    navigator.clipboard.writeText(data.cmd).then(() => {
+      const btnText = $('#forgeCopyText');
+      if (btnText) {
+        btnText.textContent = 'Copied!';
+        setTimeout(() => { btnText.textContent = 'Copy'; }, 1800);
+      }
+    });
+  };
+
+  renderForgeTab();
+
+  /* Nav */
+  const nav = $('#nav');
+  window.addEventListener('scroll', () => {
+    nav.classList.toggle('scrolled', window.scrollY > 40);
+  }, { passive: true });
+
+  $('#burger').addEventListener('click', () => document.body.classList.toggle('m-open'));
+  $$('#mmenu a').forEach(a => a.addEventListener('click', () => document.body.classList.remove('m-open')));
+
+  initForgeHero3D();
+  initBentoCards();
+
+  /* User Session Awareness */
+  fetch('/user/settings')
+    .then(r => (r.ok && !r.redirected && !r.url.includes('/user/login')) ? r.text() : null)
+    .then(html => {
+      if (!html) return;
+      const m = html.match(/id="username"[^>]*value="([^"]+)"/);
+      const login = m ? m[1] : '';
+      const navBtn = document.querySelector('.nav-btn');
+      if (navBtn) {
+        navBtn.href = '/';
+        navBtn.innerHTML = login ? `@${login}` : 'Dashboard →';
+        navBtn.title = 'Open sovereign dashboard';
+      }
+      const pBtn = document.querySelector('.ctas .btn-p');
+      if (pBtn) {
+        pBtn.href = '/';
+        pBtn.textContent = 'Open Dashboard →';
+      }
+      const gBtn = document.querySelector('.ctas .btn-g[href="/user/sign_up"]');
+      if (gBtn) {
+        gBtn.href = '/repo/create';
+        gBtn.textContent = 'New Repository';
+      }
+    })
+    .catch(() => {});
+
+  /* Master Animation Loop (Locked at 60+ FPS, Zero Noise Overhead) */
+  let lastT = performance.now();
+  function masterLoop(t) {
+    const dt = RM ? 0 : Math.min(0.05, (t - lastT) / 1000) || 0.016;
+    lastT = t;
+
+    if (renderer && scene) {
+      if (planet) {
+        if (!drag) rotY += dt * 0.12;
+        planet.rotation.y = rotY;
+        planet.rotation.x = rotX;
+      }
+      if (ring) {
+        ring.rotation.z += dt * 0.04;
+      }
+      if (embers) {
+        const p = embers.geometry.attributes.position.array;
+        for (let i = 0; i < p.length; i += 3) {
+          p[i + 1] += dt * 0.45;
+          if (p[i + 1] > 3.5) p[i + 1] = -3.5;
+        }
+        embers.geometry.attributes.position.needsUpdate = true;
+      }
+      renderer.render(scene, camera);
+    }
+
+    requestAnimationFrame(masterLoop);
+  }
+  requestAnimationFrame(masterLoop);
+
+  window.addEventListener('resize', () => {
+    if (renderer && canvas && canvas.parentElement) {
+      const w = canvas.parentElement.clientWidth;
+      const h = canvas.parentElement.clientHeight;
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+  });
+})();
+</script>
+</body>
+</html>
